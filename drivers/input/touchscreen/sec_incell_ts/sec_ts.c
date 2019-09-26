@@ -1728,17 +1728,6 @@ static void sec_ts_set_input_prop(struct sec_ts_data *ts, struct input_dev *dev,
 	input_set_drvdata(dev, ts);
 }
 
-static unsigned int boot_mode;
-static int __init setup_bootmode(char *str)
-{
-	if (get_option(&str, &boot_mode)) {
-		printk("%s: boot_mode is %u\n", __func__, boot_mode);
-		return 0;
-	}
-	return -EINVAL;
-}
-early_param("androidboot.boot_recovery", setup_bootmode);
-
 static int sec_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	struct sec_ts_data *ts;
@@ -1761,12 +1750,6 @@ static int sec_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		input_err(true, &client->dev, "%s: EIO err!\n", __func__);
 		return -EIO;
-	}
-
-	if (boot_mode == 1) {
-		input_err(true, &client->dev, "%s : Do not load driver due to : device entered recovery mode %d\n",
-			__func__, boot_mode);
-		return -ENODEV;
 	}
 
 	/* parse dt */
