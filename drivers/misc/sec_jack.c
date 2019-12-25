@@ -678,7 +678,7 @@ static int sec_jack_probe(struct platform_device *pdev)
 	int ret;
 
 	if (jack_controls.snd_card_registered != 1) {
-		dev_info(&pdev->dev, "defer as sound card not registered\n");
+		dev_dbg(&pdev->dev, "defer as sound card not registered\n");
 		return -EPROBE_DEFER;
 	}
 
