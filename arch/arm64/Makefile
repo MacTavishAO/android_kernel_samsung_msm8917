@@ -107,6 +107,9 @@ else ifeq ($(CONFIG_ARCH_MSM8953),y)
 # MSM8937
 else ifeq ($(CONFIG_ARCH_MSM8937),y)
 	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/msm8937
+# MSM8917
+else ifeq ($(CONFIG_SEC_MSM8917_PROJECT),y)
+	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/msm8917
 else
 	$(Q)$(MAKE) $(build)=$(boot)/dts/qcom
 endif
