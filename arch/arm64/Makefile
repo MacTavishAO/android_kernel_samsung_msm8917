@@ -98,17 +98,8 @@ PHONY += dtbs dtbs_install
 
 dtbs: prepare scripts
 #	$(Q)$(MAKE) $(build)=$(boot)/dts
-# MSM8953
-ifeq ($(CONFIG_SEC_SDM540_PROJECT),y)
-	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/sdm450
-# MSM8953
-else ifeq ($(CONFIG_SEC_MSM8953_PROJECT),y)
-	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/msm8953
-# MSM8937
-else ifeq ($(CONFIG_SEC_MSM8937_PROJECT),y)
-	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/msm8937
 # MSM8917
-else ifeq ($(CONFIG_SEC_MSM8917_PROJECT),y)
+ifeq ($(CONFIG_ARCH_MSM8917),y)
 	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/msm8917
 else
 	$(Q)$(MAKE) $(build)=$(boot)/dts/qcom
