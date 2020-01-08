@@ -653,8 +653,6 @@ int f2fs_recover_orphan_inodes(struct f2fs_sb_info *sbi)
 			nid_t ino = le32_to_cpu(orphan_blk->ino[j]);
 			err = recover_orphan_inode(sbi, ino);
 			if (err) {
-				print_block_data(sbi->sb, start_blk + i,
-					page_address(page), 0, F2FS_BLKSIZE);
 				f2fs_put_page(page, 1);
 				goto out;
 			}
@@ -746,20 +744,17 @@ static int get_checkpoint_version(struct f2fs_sb_info *sbi, block_t cp_addr,
 	if (crc_offset > (blk_size - sizeof(__le32))) {
 		f2fs_msg(sbi->sb, KERN_WARNING,
 			"invalid crc_offset: %zu", crc_offset);
-		goto error;
+		return -EINVAL;
 	}
 
 	crc = cur_cp_crc(*cp_block);
 	if (!f2fs_crc_valid(sbi, crc, *cp_block, crc_offset)) {
 		f2fs_msg(sbi->sb, KERN_WARNING, "invalid crc value");
-		goto error;
+		return -EINVAL;
 	}
 
 	*version = cur_cp_version(*cp_block);
 	return 0;
-error:
-	print_block_data(sbi->sb, cp_addr, page_address(*cp_page), 0, blk_size);
-	return -EINVAL;
 }
 
 static struct page *validate_checkpoint(struct f2fs_sb_info *sbi,
@@ -840,11 +835,8 @@ int f2fs_get_valid_checkpoint(struct f2fs_sb_info *sbi)
 	memcpy(sbi->ckpt, cp_block, blk_size);
 
 	/* Sanity checking of checkpoint */
-	if (f2fs_sanity_check_ckpt(sbi)) {
-		print_block_data(sbi->sb, cur_page->index,
-				 page_address(cur_page), 0, blk_size);
+	if (f2fs_sanity_check_ckpt(sbi))
 		goto free_fail_no_cp;
-	}
 
 	if (cur_page == cp1)
 		sbi->cur_cp_pack = 1;
@@ -1069,7 +1061,6 @@ retry_flush_dents:
 		err = f2fs_sync_dirty_inodes(sbi, DIR_INODE);
 		if (err)
 			goto out;
-		blk_flush_plug(current);
 		cond_resched();
 		goto retry_flush_dents;
 	}
@@ -1086,7 +1077,6 @@ retry_flush_dents:
 		err = f2fs_sync_inode_meta(sbi);
 		if (err)
 			goto out;
-		blk_flush_plug(current);
 		cond_resched();
 		goto retry_flush_dents;
 	}
@@ -1104,7 +1094,6 @@ retry_flush_nodes:
 			f2fs_unlock_all(sbi);
 			goto out;
 		}
-		blk_flush_plug(current);
 		cond_resched();
 		goto retry_flush_nodes;
 	}

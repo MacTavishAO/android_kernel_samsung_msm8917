@@ -2835,14 +2835,7 @@ static inline int ext4_issue_discard(struct super_block *sb,
 	count = EXT4_C2B(EXT4_SB(sb), count);
 	trace_ext4_discard_blocks(sb,
 			(unsigned long long) discard_block, count);
-	if (biop) {
-		return __blkdev_issue_discard(sb->s_bdev,
-			(sector_t)discard_block << (sb->s_blocksize_bits - 9),
-			(sector_t)count << (sb->s_blocksize_bits - 9),
-			GFP_NOFS, flags, biop);
-	} else
-		return sb_issue_discard(sb, discard_block, count,
-					GFP_NOFS, flags);
+	return sb_issue_discard(sb, discard_block, count, GFP_NOFS, flags);
 }
 
 static void ext4_free_data_in_buddy(struct super_block *sb,

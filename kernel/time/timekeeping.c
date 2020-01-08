@@ -1070,6 +1070,8 @@ static void __timekeeping_inject_sleeptime(struct timekeeper *tk,
 	tk_xtime_add(tk, delta);
 	tk_set_wall_to_mono(tk, timespec64_sub(tk->wall_to_monotonic, *delta));
 	tk_update_sleep_time(tk, timespec64_to_ktime(*delta));
+	
+/*
 #ifdef CONFIG_SEC_PM_DEBUG
 #ifdef CONFIG_ARCH_MSM8917
 	printk("Suspended for %llu.%03lu seconds\n",
@@ -1079,6 +1081,7 @@ static void __timekeeping_inject_sleeptime(struct timekeeper *tk,
 			delta->tv_sec, delta->tv_nsec / NSEC_PER_MSEC);
 #endif
 #endif
+*/
 	tk_debug_account_sleep_time(delta);
 }
 
