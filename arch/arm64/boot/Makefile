@@ -15,6 +15,7 @@
 #
 
 include $(srctree)/arch/arm64/boot/dts/qcom/Makefile
+include $(srctree)/arch/arm64/boot/dts/samsung/msm8917/Makefile
 
 targets := Image Image.gz
 

@@ -260,5 +260,38 @@ config MACH_J8Y18LTE_SEA_OPEN
 	bool "Samsung J8Y18-LTE SEA OPEN"
 	help
 	  Support for Samsung J8Y18-LTE SEA OPEN device.
-	  
 
+config SEC_J6PRIMELTE_PROJECT
+	depends on ARCH_MSM8937
+	default n
+	bool "Samsung J6PRIMELTE Project"
+	help
+	Support for Samsung J6PRIMELTE Project
+
+config MACH_J6PRIMELTE_SWA_OPEN
+	depends on SEC_J6PRIMELTE_PROJECT
+	default n
+	bool "Samsung J6PRIMELTE SWA OPEN"
+	help
+	Support for Samsung J6PRIMELTE SWA OPEN device.
+
+config SEC_J4PRIMELTE_PROJECT
+	depends on ARCH_MSM8937
+	default n
+	bool "Samsung J4PRIMELTE Project"
+	help
+	Support for Samsung J4PRIMELTE Project
+
+config MACH_J4PRIMELTE_SEA_OPEN
+	depends on SEC_J4PRIMELTE_PROJECT
+	default n
+	bool "Samsung J4PRIMELTE SEA OPEN"
+	help
+	Support for Samsung J4PRIMELTE SEA OPEN device.
+		
+config MACH_J4PRIMELTE_KOR_OPEN
+	depends on SEC_J4PRIMELTE_PROJECT
+	default n
+	bool "Samsung J4PRIMELTE KOR OPEN"
+	help
+	Support for Samsung J4PRIMELTE KOR OPEN device.
