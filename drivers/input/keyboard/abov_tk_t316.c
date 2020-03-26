@@ -3545,7 +3545,9 @@ static int abov_tk_probe(struct i2c_client *client,
 	set_bit(EV_KEY, input_dev->evbit);
 	set_bit(KEY_RECENT, input_dev->keybit);
 	set_bit(KEY_BACK, input_dev->keybit);
+#ifdef CONFIG_TOUCHKEY_GRIP
 	set_bit(KEY_CP_GRIP, input_dev->keybit);
+#endif
 	set_bit(EV_LED, input_dev->evbit);
 	set_bit(LED_MISC, input_dev->ledbit);
 	input_set_drvdata(input_dev, info);
