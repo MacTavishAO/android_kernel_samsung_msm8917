@@ -3128,9 +3128,9 @@ bool ist30xx_tclm_check_condition_valid(struct ist30xx_data *data){
 		if ((data->root_of_calibration == CALPOSITION_TUNEUP) \
 			|| (data->root_of_calibration == CALPOSITION_INITIAL)) {
 			return true;
-		} else if (!((data->cal_position == CALPOSITION_LCIA) \
-			|| (data->cal_position == CALPOSITION_SVCCENTER)) \
-			&& (data->root_of_calibration == CALPOSITION_TESTMODE)) {
+		} else if ((data->root_of_calibration == CALPOSITION_TESTMODE)
+			&& ((data->cal_position == CALPOSITION_TESTMODE)
+			|| (data->cal_position == CALPOSITION_TUNEUP))) {
 			return true;
 		}
 		break;
