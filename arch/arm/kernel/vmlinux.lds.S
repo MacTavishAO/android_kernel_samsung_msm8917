@@ -98,7 +98,14 @@ SECTIONS
 	. = ALIGN(1<<SECTION_SHIFT);
 #endif
 
+#ifdef CONFIG_PROCA
+	_proca_conf_offset = g_proca_config - _stext + 4;
+#else
+	_proca_conf_offset = 0xecefecef; /* Magic number for proca ta	*/
+#endif
+
 	.text : {			/* Real text segment		*/
+		*(.proca_kernel_header.text)
 		_stext = .;		/* Text and read-only data	*/
 			__exception_text_start = .;
 			*(.exception.text)

@@ -708,6 +708,11 @@ ENTRY(fixup_pv_table)
 	ldmfd	sp!, {r4 - r7, pc}
 ENDPROC(fixup_pv_table)
 
+.section ".proca_kernel_header.text", "ax"
+	b proca_data_end
+	.word   _proca_conf_offset
+proca_data_end:
+
 	.data
 	.globl	__pv_phys_pfn_offset
 	.type	__pv_phys_pfn_offset, %object
