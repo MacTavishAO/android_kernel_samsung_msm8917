@@ -761,7 +761,7 @@ static void mbim_notify_complete(struct usb_ep *ep, struct usb_request *req)
 
 	spin_unlock(&mbim->lock);
 
-	pr_debug("dev:%pK Exit\n", mbim);
+	pr_debug("%s: Exit\n", __func__);
 }
 
 static void mbim_ep0out_complete(struct usb_ep *ep, struct usb_request *req)
@@ -771,8 +771,6 @@ static void mbim_ep0out_complete(struct usb_ep *ep, struct usb_request *req)
 	struct usb_function	*f = req->context;
 	struct f_mbim		*mbim = func_to_mbim(f);
 	struct mbim_ntb_input_size *ntb = NULL;
-
-	pr_debug("dev:%pK\n", mbim);
 
 	req->context = NULL;
 	if (req->status || req->actual != req->length) {
@@ -810,7 +808,7 @@ static void mbim_ep0out_complete(struct usb_ep *ep, struct usb_request *req)
 invalid:
 	usb_ep_set_halt(ep);
 
-	pr_err("dev:%pK Failed\n", mbim);
+	pr_err("%s: Failed\n", __func__);
 
 	return;
 }
@@ -1926,7 +1924,6 @@ mbim_write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 		}
 		dev->cpkt_drop_cnt++;
 		spin_unlock_irqrestore(&dev->lock, flags);
-		pr_err("drop ctrl pkt of len %d error %d\n", cpkt->len, ret);
 	} else {
 		ret = 0;
 	}
