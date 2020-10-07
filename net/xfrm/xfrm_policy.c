@@ -942,8 +942,10 @@ int xfrm_policy_flush(struct net *net, u8 type, bool task_valid)
 	write_lock_bh(&net->xfrm.xfrm_policy_lock);
 
 	err = xfrm_policy_flush_secctx_check(net, type, task_valid);
-	if (err)
+	if (err) {
+		pr_err("kp log: failed @ xfrm_policy_flush_secctx_check with err [%d]\n", err);
 		goto out;
+	}
 
 	for (dir = 0; dir < XFRM_POLICY_MAX; dir++) {
 		struct xfrm_policy *pol;
@@ -986,8 +988,10 @@ int xfrm_policy_flush(struct net *net, u8 type, bool task_valid)
 		}
 
 	}
-	if (!cnt)
+	if (!cnt) {
+		pr_err("kp log: cnt not set\n");
 		err = -ESRCH;
+	}
 out:
 	write_unlock_bh(&net->xfrm.xfrm_policy_lock);
 	return err;
@@ -3026,7 +3030,8 @@ void __init xfrm_init(void)
 	xfrm_input_init();
 }
 
-#ifdef CONFIG_AUDITSYSCALL
+// [ SEC_SELINUX_PORTING_COMMON - remove AUDIT_MAC_IPSEC_EVENT audit log, it conflict with security notification
+#if 0 // #ifdef CONFIG_AUDITSYSCALL
 static void xfrm_audit_common_policyinfo(struct xfrm_policy *xp,
 					 struct audit_buffer *audit_buf)
 {
@@ -3090,6 +3095,7 @@ void xfrm_audit_policy_delete(struct xfrm_policy *xp, int result,
 }
 EXPORT_SYMBOL_GPL(xfrm_audit_policy_delete);
 #endif
+// ] SEC_SELINUX_PORTING_COMMON - remove AUDIT_MAC_IPSEC_EVENT audit log, it conflict with security notification
 
 #ifdef CONFIG_XFRM_MIGRATE
 static bool xfrm_migrate_selector_match(const struct xfrm_selector *sel_cmp,
