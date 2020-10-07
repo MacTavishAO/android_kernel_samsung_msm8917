@@ -201,6 +201,7 @@ struct ion_heap {
 
 	int (*debug_show)(struct ion_heap *heap, struct seq_file *, void *);
 	atomic_long_t total_allocated;
+	atomic_long_t total_allocated_peak;
 	atomic_long_t total_handles;
 };
 
@@ -533,4 +534,6 @@ int ion_phys_nolock(struct ion_client *client, struct ion_handle *handle,
  */
 struct ion_handle *ion_import_dma_buf_nolock(struct ion_client *client, int fd);
 
+void show_ion_system_heap_size(struct seq_file *s);
+void show_ion_system_heap_pool_size(struct seq_file *s);
 #endif /* _ION_PRIV_H */
