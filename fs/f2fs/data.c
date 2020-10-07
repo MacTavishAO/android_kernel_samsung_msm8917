@@ -127,6 +127,45 @@ static bool f2fs_bio_post_read_required(struct bio *bio, int err)
 
 static void f2fs_read_end_io(struct bio *bio, int err)
 {
+	}
+	if (bio->bi_private)
+		mempool_free(bio->bi_private, bio_post_read_ctx_pool);
+	bio_put(bio);
+}
+
+static void bio_post_read_processing(struct bio_post_read_ctx *ctx);
+
+static void decrypt_work(struct work_struct *work)
+{
+	struct bio_post_read_ctx *ctx =
+		container_of(work, struct bio_post_read_ctx, work);
+
+	fscrypt_decrypt_bio(ctx->bio);
+
+	bio_post_read_processing(ctx);
+}
+
+static void bio_post_read_processing(struct bio_post_read_ctx *ctx)
+{
+	switch (++ctx->cur_step) {
+	case STEP_DECRYPT:
+		if (ctx->enabled_steps & (1 << STEP_DECRYPT)) {
+			INIT_WORK(&ctx->work, decrypt_work);
+			fscrypt_enqueue_decrypt_work(&ctx->work);
+		ctx->cur_step++;
+		/* fall-through */
+	default:
+		__read_end_io(ctx->bio, 0);
+	}
+}
+
+static bool f2fs_bio_post_read_required(struct bio *bio, int err)
+{
+	return bio->bi_private && !err;
+}
+
+static void f2fs_read_end_io(struct bio *bio, int err)
+{
 	if (time_to_inject(F2FS_P_SB(bio->bi_io_vec->bv_page), FAULT_IO)) {
 		f2fs_show_injection_info(FAULT_IO);
 		err = -EIO;
@@ -134,11 +173,9 @@ static void f2fs_read_end_io(struct bio *bio, int err)
 
 	if (f2fs_bio_post_read_required(bio, err)) {
 		struct bio_post_read_ctx *ctx = bio->bi_private;
-
 		ctx->cur_step = STEP_INITIAL;
 		bio_post_read_processing(ctx);
 		return;
-	}
 
 	__read_end_io(bio, err);
 }
@@ -168,6 +205,8 @@ static void f2fs_write_end_io(struct bio *bio, int err)
 
 		if (unlikely(err)) {
 			set_bit(AS_EIO, &page->mapping->flags);
+			f2fs_bug_on(sbi, page->mapping == NODE_MAPPING(sbi) ||
+					 page->mapping == META_MAPPING(sbi));
 			if (type == F2FS_WB_CP_DATA)
 				f2fs_stop_checkpoint(sbi, true);
 		}

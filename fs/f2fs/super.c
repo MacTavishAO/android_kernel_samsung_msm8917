@@ -115,6 +115,7 @@ enum {
 	Opt_noinline_data,
 	Opt_data_flush,
 	Opt_reserve_root,
+	Opt_reserve_core,
 	Opt_resgid,
 	Opt_resuid,
 	Opt_mode,
@@ -173,6 +174,7 @@ static match_table_t f2fs_tokens = {
 	{Opt_noinline_data, "noinline_data"},
 	{Opt_data_flush, "data_flush"},
 	{Opt_reserve_root, "reserve_root=%u"},
+	{Opt_reserve_core, "reserve_core=%u"},
 	{Opt_resgid, "resgid=%u"},
 	{Opt_resuid, "resuid=%u"},
 	{Opt_mode, "mode=%s"},
@@ -210,15 +212,15 @@ void f2fs_msg(struct super_block *sb, const char *level, const char *fmt, ...)
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
-	printk_ratelimited("%sF2FS-fs (%s): %pV\n", level, sb->s_id, &vaf);
+	printk("%sF2FS-fs (%s): %pV\n", level, sb->s_id, &vaf);
 	va_end(args);
 }
 
 static inline void limit_reserve_root(struct f2fs_sb_info *sbi)
 {
-	block_t limit = (sbi->user_block_count << 1) / 1000;
+	block_t limit = sbi->user_block_count / 100;
 
-	/* limit is 0.2% */
+	/* limit is 1.0% */
 	if (test_opt(sbi, RESERVE_ROOT) &&
 			F2FS_OPTION(sbi).root_reserved_blocks > limit) {
 		F2FS_OPTION(sbi).root_reserved_blocks = limit;
@@ -226,17 +228,26 @@ static inline void limit_reserve_root(struct f2fs_sb_info *sbi)
 			"Reduce reserved blocks for root = %u",
 			F2FS_OPTION(sbi).root_reserved_blocks);
 	}
+	if (test_opt(sbi, RESERVE_ROOT) &&
+			F2FS_OPTION(sbi).core_reserved_blocks > limit) {
+		F2FS_OPTION(sbi).core_reserved_blocks = limit;
+		f2fs_msg(sbi->sb, KERN_INFO,
+			"Reduce reserved blocks for core = %u",
+			F2FS_OPTION(sbi).core_reserved_blocks);
+	}
 	if (!test_opt(sbi, RESERVE_ROOT) &&
 		(!uid_eq(F2FS_OPTION(sbi).s_resuid,
 				make_kuid(&init_user_ns, F2FS_DEF_RESUID)) ||
 		!gid_eq(F2FS_OPTION(sbi).s_resgid,
-				make_kgid(&init_user_ns, F2FS_DEF_RESGID))))
+				make_kgid(&init_user_ns, F2FS_DEF_RESGID)) ||
+		F2FS_OPTION(sbi).core_reserved_blocks != 0))
 		f2fs_msg(sbi->sb, KERN_INFO,
-			"Ignore s_resuid=%u, s_resgid=%u w/o reserve_root",
+			"Ignore s_resuid=%u, s_resgid=%u reserve_core=%u w/o reserve_root",
 				from_kuid_munged(&init_user_ns,
 					F2FS_OPTION(sbi).s_resuid),
 				from_kgid_munged(&init_user_ns,
-					F2FS_OPTION(sbi).s_resgid));
+					F2FS_OPTION(sbi).s_resgid),
+				F2FS_OPTION(sbi).core_reserved_blocks);
 }
 
 static void init_once(void *foo)
@@ -556,6 +567,11 @@ static int parse_options(struct super_block *sb, char *options)
 				set_opt(sbi, RESERVE_ROOT);
 			}
 			break;
+		case Opt_reserve_core:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			F2FS_OPTION(sbi).core_reserved_blocks = arg;
+			break;
 		case Opt_resuid:
 			if (args->from && match_int(args, &arg))
 				return -EINVAL;
@@ -869,6 +885,9 @@ static struct inode *f2fs_alloc_inode(struct super_block *sb)
 	init_once((void *) fi);
 
 	/* Initialize f2fs-specific inode info */
+	/* F2FS doesn't write value of i_version to disk and
+	   it will be reinitialize after a reboot.*/
+	fi->vfs_inode.i_version = 1;
 	atomic_set(&fi->dirty_pages, 0);
 	init_rwsem(&fi->i_sem);
 	INIT_LIST_HEAD(&fi->dirty_list);
@@ -1209,9 +1228,11 @@ static int f2fs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_blocks = total_count - start_count;
 	buf->f_bfree = user_block_count - valid_user_blocks(sbi) -
 						sbi->current_reserved_blocks;
-	if (buf->f_bfree > F2FS_OPTION(sbi).root_reserved_blocks)
+	if (buf->f_bfree > F2FS_OPTION(sbi).root_reserved_blocks +
+			   F2FS_OPTION(sbi).core_reserved_blocks)
 		buf->f_bavail = buf->f_bfree -
-				F2FS_OPTION(sbi).root_reserved_blocks;
+				F2FS_OPTION(sbi).root_reserved_blocks -
+				F2FS_OPTION(sbi).core_reserved_blocks;
 	else
 		buf->f_bavail = 0;
 
@@ -1346,8 +1367,9 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 		seq_puts(seq, "lfs");
 	seq_printf(seq, ",active_logs=%u", F2FS_OPTION(sbi).active_logs);
 	if (test_opt(sbi, RESERVE_ROOT))
-		seq_printf(seq, ",reserve_root=%u,resuid=%u,resgid=%u",
+		seq_printf(seq, ",reserve_root=%u,reserve_core=%u,resuid=%u,resgid=%u",
 				F2FS_OPTION(sbi).root_reserved_blocks,
+				F2FS_OPTION(sbi).core_reserved_blocks,
 				from_kuid_munged(&init_user_ns,
 					F2FS_OPTION(sbi).s_resuid),
 				from_kgid_munged(&init_user_ns,
@@ -1573,6 +1595,7 @@ skip:
 		(test_opt(sbi, POSIX_ACL) ? MS_POSIXACL : 0);
 
 	limit_reserve_root(sbi);
+	f2fs_msg(sb, KERN_NOTICE, "re-mounted. Opts: %s", data);
 	return 0;
 restore_gc:
 	if (need_restart_gc) {
@@ -2586,7 +2609,7 @@ static int init_blkz_info(struct f2fs_sb_info *sbi, int devi)
  */
 static int read_raw_super_block(struct f2fs_sb_info *sbi,
 			struct f2fs_super_block **raw_super,
-			int *valid_super_block, int *recovery)
+			int *valid_super_block, int *recovery, bool verbose)
 {
 	struct super_block *sb = sbi->sb;
 	int block;
@@ -2613,6 +2636,8 @@ static int read_raw_super_block(struct f2fs_sb_info *sbi,
 				"Can't find valid F2FS filesystem in %dth superblock",
 				block + 1);
 			err = -EINVAL;
+			if (verbose)
+				print_bh(sb, bh, 0, sb->s_blocksize);
 			brelse(bh);
 			continue;
 		}
@@ -2792,6 +2817,7 @@ static int f2fs_fill_super(struct super_block *sb, void *data, int silent)
 	int err;
 	bool retry = true, need_fsck = false;
 	char *options = NULL;
+	char *orig_data = kstrdup(data, GFP_KERNEL);
 	int recovery, i, valid_super_block;
 	struct curseg_info *seg_i;
 
@@ -2824,12 +2850,15 @@ try_onemore:
 	}
 
 	err = read_raw_super_block(sbi, &raw_super, &valid_super_block,
-								&recovery);
+								&recovery, retry);
 	if (err)
 		goto free_sbi;
 
 	sb->s_fs_info = sbi;
 	sbi->raw_super = raw_super;
+
+	F2FS_OPTION(sbi).s_resuid = make_kuid(&init_user_ns, F2FS_DEF_RESUID);
+	F2FS_OPTION(sbi).s_resgid = make_kgid(&init_user_ns, F2FS_DEF_RESGID);
 
 	/* precompute checksum seed for metadata */
 	if (f2fs_sb_has_inode_chksum(sb))
@@ -2895,6 +2924,9 @@ try_onemore:
 	sb->s_time_gran = 1;
 	sb->s_flags = (sb->s_flags & ~MS_POSIXACL) |
 		(test_opt(sbi, POSIX_ACL) ? MS_POSIXACL : 0);
+#ifdef CONFIG_FIVE
+	sb->s_flags |= MS_I_VERSION;
+#endif
 	memcpy(sb->s_uuid, raw_super->uuid, sizeof(raw_super->uuid));
 	/* FIXME: no cgroup support */
 	/* sb->s_iflags |= SB_I_CGROUPWB; */
@@ -3141,8 +3173,10 @@ skip_recovery:
 
 	f2fs_tuning_parameters(sbi);
 
-	f2fs_msg(sbi->sb, KERN_NOTICE, "Mounted with checkpoint version = %llx",
-				cur_cp_version(F2FS_CKPT(sbi)));
+	f2fs_msg(sbi->sb, KERN_NOTICE, "Mounted with checkpoint version = %llx"
+				"Opts: %s", cur_cp_version(F2FS_CKPT(sbi)), orig_data);
+	kfree(orig_data);
+	
 	f2fs_update_time(sbi, CP_TIME);
 	f2fs_update_time(sbi, REQ_TIME);
 	return 0;
@@ -3210,6 +3244,7 @@ free_sbi:
 		shrink_dcache_sb(sb);
 		goto try_onemore;
 	}
+	kfree(orig_data);
 	return err;
 }
 
