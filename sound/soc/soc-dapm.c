@@ -1068,6 +1068,9 @@ int snd_soc_dapm_dai_get_connected_widgets(struct snd_soc_dai *dai, int stream,
 	struct snd_soc_card *card = dai->card;
 	int paths;
 
+	if (dai->playback_widget == NULL || list == NULL)
+		return -EINVAL;
+
 	mutex_lock_nested(&card->dapm_mutex, SND_SOC_DAPM_CLASS_RUNTIME);
 	dapm_reset(card);
 
