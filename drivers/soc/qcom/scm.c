@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2017, 2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,6 +23,15 @@
 #include <asm/compiler.h>
 
 #include <soc/qcom/scm.h>
+
+#include <linux/thread_info.h>
+#include <linux/sched.h>
+#include <linux/string.h>
+#if defined(CONFIG_ARCH_MSM8953)
+#include <linux/smp.h>
+#endif
+
+#include <linux/sec_debug.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/scm.h>
@@ -215,6 +224,13 @@ static u32 smc(u32 cmd_addr)
 
 	return r0;
 }
+
+#if defined(CONFIG_ARCH_MSM8953)
+static void __wrap_flush_cache_all(void* vp)
+{
+	flush_cache_all();
+}
+#endif
 
 static int __scm_call(const struct scm_command *cmd)
 {
@@ -624,6 +640,112 @@ static int allocate_extra_arg_buffer(struct scm_desc *desc, gfp_t flags)
 	return 0;
 }
 
+#ifdef CONFIG_TIMA_LKMAUTH
+pid_t pid_from_lkm = -1;
+#endif
+
+static int __scm_call2(u32 fn_id, struct scm_desc *desc, bool retry)
+{
+	const char * const proca_clients_names[] = {
+		 "secure_storage_", "pa_daemon", "proca@1.0-servi",
+		 "vaultkeeper@1.0", "vaultkeeperd", "keymaster@3.0-s",
+		 "wsmd", "wsm@1.0-service", NULL
+	}; // keep last NULL!
+	int call_from_proca = 0;
+	int i;
+	int arglen = desc->arginfo & 0xf;
+	int ret, retry_count = 0;
+	u64 x0;
+
+	if (unlikely(!is_scm_armv8()))
+		return -ENODEV;
+
+	ret = allocate_extra_arg_buffer(desc, GFP_KERNEL);
+	if (ret)
+		return ret;
+
+	x0 = fn_id | scm_version_mask;
+
+	/*
+	 * in case of pa_daemon
+	 */
+	for (i = 0; proca_clients_names[i]; i++) {
+		if (strncmp(current_thread_info()->task->comm, proca_clients_names[i],
+					TASK_COMM_LEN - 1) == 0) {
+			call_from_proca = 1;
+			break;
+		}
+	}
+
+	sec_debug_secure_log(fn_id, SCM_ENTRY);
+
+	do {
+		mutex_lock(&scm_lock);
+
+		if (SCM_SVC_ID(fn_id) == SCM_SVC_LMH)
+			mutex_lock(&scm_lmh_lock);
+
+		desc->ret[0] = desc->ret[1] = desc->ret[2] = 0;
+
+		trace_scm_call_start(x0, desc);
+
+#ifdef CONFIG_TIMA_LKMAUTH
+		if ((pid_from_lkm == current_thread_info()->task->pid) || call_from_proca) {
+#else
+		if (call_from_proca) {
+#endif
+			flush_cache_all();
+
+#if defined(CONFIG_ARCH_MSM8917) || defined(CONFIG_ARCH_MSM8937) ||  defined(CONFIG_ARCH_MSM8953)
+			smp_call_function((void (*)(void *))__wrap_flush_cache_all, NULL, 1);
+#endif
+
+#ifndef CONFIG_ARM64
+			outer_flush_all();
+#endif
+		}
+		if (scm_version == SCM_ARMV8_64)
+			ret = __scm_call_armv8_64(x0, desc->arginfo,
+						  desc->args[0], desc->args[1],
+						  desc->args[2], desc->x5,
+						  &desc->ret[0], &desc->ret[1],
+						  &desc->ret[2]);
+		else
+			ret = __scm_call_armv8_32(x0, desc->arginfo,
+						  desc->args[0], desc->args[1],
+						  desc->args[2], desc->x5,
+						  &desc->ret[0], &desc->ret[1],
+						  &desc->ret[2]);
+
+		trace_scm_call_end(desc);
+
+		if (SCM_SVC_ID(fn_id) == SCM_SVC_LMH)
+			mutex_unlock(&scm_lmh_lock);
+
+		mutex_unlock(&scm_lock);
+		if (!retry)
+			goto out;
+
+		if (ret == SCM_V2_EBUSY)
+			msleep(SCM_EBUSY_WAIT_MS);
+		if (retry_count == 33)
+			pr_warn("scm: secure world has been busy for 1 second!\n");
+	} while (ret == SCM_V2_EBUSY && (retry_count++ < SCM_EBUSY_MAX_RETRY));
+out:
+
+	sec_debug_secure_log(fn_id, SCM_EXIT);
+
+	if (ret < 0)
+		pr_err("scm_call failed: func id %#llx, ret: %d, syscall returns: %#llx, %#llx, %#llx\n",
+			x0, ret, desc->ret[0], desc->ret[1], desc->ret[2]);
+
+	if (arglen > N_REGISTER_ARGS)
+		kfree(desc->extra_arg_buf);
+	if (ret < 0)
+		return scm_remap_error(ret);
+	return 0;
+}
+
 /**
  * scm_call2() - Invoke a syscall in the secure world
  * @fn_id: The function ID for this syscall
@@ -644,69 +766,24 @@ static int allocate_extra_arg_buffer(struct scm_desc *desc, gfp_t flags)
  * Note that cache maintenance on the argument buffer (desc->args) is taken care
  * of by scm_call2; however, callers are responsible for any other cached
  * buffers passed over to the secure world.
-*/
+ */
 int scm_call2(u32 fn_id, struct scm_desc *desc)
 {
-	int arglen = desc->arginfo & 0xf;
-	int ret, retry_count = 0;
-	u64 x0;
-
-	if (unlikely(!is_scm_armv8()))
-		return -ENODEV;
-
-	ret = allocate_extra_arg_buffer(desc, GFP_KERNEL);
-	if (ret)
-		return ret;
-
-	x0 = fn_id | scm_version_mask;
-
-	do {
-		mutex_lock(&scm_lock);
-
-		if (SCM_SVC_ID(fn_id) == SCM_SVC_LMH)
-			mutex_lock(&scm_lmh_lock);
-
-		desc->ret[0] = desc->ret[1] = desc->ret[2] = 0;
-
-		trace_scm_call_start(x0, desc);
-
-		if (scm_version == SCM_ARMV8_64)
-			ret = __scm_call_armv8_64(x0, desc->arginfo,
-						  desc->args[0], desc->args[1],
-						  desc->args[2], desc->x5,
-						  &desc->ret[0], &desc->ret[1],
-						  &desc->ret[2]);
-		else
-			ret = __scm_call_armv8_32(x0, desc->arginfo,
-						  desc->args[0], desc->args[1],
-						  desc->args[2], desc->x5,
-						  &desc->ret[0], &desc->ret[1],
-						  &desc->ret[2]);
-
-		trace_scm_call_end(desc);
-
-		if (SCM_SVC_ID(fn_id) == SCM_SVC_LMH)
-			mutex_unlock(&scm_lmh_lock);
-
-		mutex_unlock(&scm_lock);
-
-		if (ret == SCM_V2_EBUSY)
-			msleep(SCM_EBUSY_WAIT_MS);
-		if (retry_count == 33)
-			pr_warn("scm: secure world has been busy for 1 second!\n");
-	}  while (ret == SCM_V2_EBUSY && (retry_count++ < SCM_EBUSY_MAX_RETRY));
-
-	if (ret < 0)
-		pr_err("scm_call failed: func id %#llx, ret: %d, syscall returns: %#llx, %#llx, %#llx\n",
-			x0, ret, desc->ret[0], desc->ret[1], desc->ret[2]);
-
-	if (arglen > N_REGISTER_ARGS)
-		kfree(desc->extra_arg_buf);
-	if (ret < 0)
-		return scm_remap_error(ret);
-	return 0;
+	return __scm_call2(fn_id, desc, true);
 }
 EXPORT_SYMBOL(scm_call2);
+
+/**
+ * scm_call2_noretry() - Invoke a syscall in the secure world
+ *
+ * Similar to scm_call2 except that there is no retry mechanism
+ * implemented.
+ */
+int scm_call2_noretry(u32 fn_id, struct scm_desc *desc)
+{
+	return __scm_call2(fn_id, desc, false);
+}
+EXPORT_SYMBOL(scm_call2_noretry);
 
 /**
  * scm_call2_atomic() - Invoke a syscall in the secure world

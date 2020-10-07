@@ -31,6 +31,7 @@
 #include <linux/of_gpio.h>
 #include <linux/of_address.h>
 #include <linux/io.h>
+#include <linux/sec_debug.h>
 #include <linux/dma-mapping.h>
 #include <soc/qcom/ramdump.h>
 #include <soc/qcom/subsystem_restart.h>
@@ -783,6 +784,7 @@ int pil_boot(struct pil_desc *desc)
 	struct pil_priv *priv = desc->priv;
 	bool mem_protect = false;
 	bool hyp_assign = false;
+	bool secure_check_fail = false;
 
 	if (desc->shutdown_fail)
 		pil_err(desc, "Subsystem shutdown failed previously!\n");
@@ -847,6 +849,7 @@ int pil_boot(struct pil_desc *desc)
 	if (ret) {
 		pil_err(desc, "Invalid firmware metadata\n");
 		subsys_set_error(desc->subsys_dev, firmware_error_msg);
+		secure_check_fail = true;
 		goto err_boot;
 	}
 
@@ -892,6 +895,7 @@ int pil_boot(struct pil_desc *desc)
 	if (ret) {
 		pil_err(desc, "Failed to bring out of reset\n");
 		subsys_set_error(desc->subsys_dev, firmware_error_msg);
+		secure_check_fail = true;
 		goto err_auth_and_reset;
 	}
 	pil_info(desc, "Brought out of reset\n");
@@ -930,6 +934,11 @@ out:
 			priv->region = NULL;
 		}
 		pil_release_mmap(desc);
+		
+		if (secure_check_fail && (ret == -EINVAL) &&
+		    (!strcmp(desc->name, "mba") ||
+		     !strcmp(desc->name, "modem")))
+			sec_peripheral_secure_check_fail();
 	}
 	return ret;
 }
