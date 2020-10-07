@@ -85,6 +85,8 @@
 #include <asm/paravirt.h>
 #endif
 
+#include <linux/sec_debug.h>
+
 #include "qhmp_sched.h"
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
@@ -4185,6 +4187,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	struct mm_struct *mm, *oldmm;
 
 	prepare_task_switch(rq, prev, next);
+	sec_debug_task_sched_log(smp_processor_id(), next, prev);
 
 	mm = next->mm;
 	oldmm = prev->active_mm;
