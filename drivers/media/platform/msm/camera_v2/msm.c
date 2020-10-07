@@ -80,7 +80,7 @@ spinlock_t msm_pid_lock;
 #define msm_delete_sd_entry(queue, type, member, q_node) ({		\
 	unsigned long flags;					\
 	struct msm_queue_head *__q = (queue);			\
-	type *node = 0;				\
+	type *node = NULL;				\
 	spin_lock_irqsave(&__q->lock, flags);			\
 	if (!list_empty(&__q->list)) {				\
 		list_for_each_entry(node, &__q->list, member)	\
@@ -392,11 +392,6 @@ static void msm_add_sd_in_position(struct msm_sd_subdev *msm_subdev,
 	struct msm_sd_subdev *temp_sd;
 
 	list_for_each_entry(temp_sd, sd_list, list) {
-		if (temp_sd == msm_subdev) {
-			pr_err("%s :Fail to add the same sd %d\n",
-				__func__, __LINE__);
-			return;
-		}
 		if (msm_subdev->close_seq < temp_sd->close_seq) {
 			list_add_tail(&msm_subdev->list, &temp_sd->list);
 			return;
@@ -733,18 +728,18 @@ static long msm_private_ioctl(struct file *file, void *fh,
 		return 0;
 	}
 
-	if (!event_data)
-		return -EINVAL;
-
-	switch (cmd) {
+    switch (cmd) {
 	case MSM_CAM_V4L2_IOCTL_NOTIFY:
 	case MSM_CAM_V4L2_IOCTL_CMD_ACK:
-	case MSM_CAM_V4L2_IOCTL_NOTIFY_DEBUG:
+        case MSM_CAM_V4L2_IOCTL_NOTIFY_DEBUG:
 	case MSM_CAM_V4L2_IOCTL_NOTIFY_ERROR:
 		break;
 	default:
 		return -ENOTTY;
 	}
+
+	if (!event_data)
+		return -EINVAL;
 
 	memset(&event, 0, sizeof(struct v4l2_event));
 	session_id = event_data->session_id;
@@ -1019,7 +1014,7 @@ static int msm_close(struct file *filep)
 	/*stop all hardware blocks immediately*/
 	mutex_lock(&ordered_sd_mtx);
 	if (!list_empty(&msm_v4l2_dev->subdevs))
-		list_for_each_entry(msm_sd, &ordered_sd_list, list)
+		list_for_each_entry_reverse(msm_sd, &ordered_sd_list, list)
 			__msm_sd_close_subdevs(msm_sd, &sd_close);
 	mutex_unlock(&ordered_sd_mtx);
 
@@ -1277,7 +1272,7 @@ static ssize_t write_logsync(struct file *file, const char __user *buf,
 	uint64_t seq_num = 0;
 	int ret;
 
-	if (copy_from_user(lbuf, buf, sizeof(lbuf) - 1))
+	if (copy_from_user(lbuf, buf, sizeof(lbuf)))
 		return -EFAULT;
 
 	ret = sscanf(lbuf, "%llu", &seq_num);
@@ -1387,7 +1382,7 @@ static int msm_probe(struct platform_device *pdev)
 		pr_warn("NON-FATAL: failed to create logsync base directory\n");
 	} else {
 		if (!debugfs_create_file(MSM_CAM_LOGSYNC_FILE_NAME,
-					 0666,
+					 0660,
 					 cam_debugfs_root,
 					 NULL,
 					 &logsync_fops))

@@ -673,6 +673,7 @@ static int hfi_fill_codec_info(u8 *data_ptr,
 					"Max supported sessions reached");
 				break;
 			}
+
 		}
 	}
 	sys_init_done->codec_count = codec_count;

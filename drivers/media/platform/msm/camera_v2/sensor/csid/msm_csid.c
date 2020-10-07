@@ -452,7 +452,7 @@ static irqreturn_t msm_csid_irq(int irq_num, void *data)
 	}
 	irq = msm_camera_io_r(csid_dev->base +
 		csid_dev->ctrl_reg->csid_reg.csid_irq_status_addr);
-	CDBG("%s CSID%d_IRQ_STATUS_ADDR = 0x%x\n",
+	pr_err("%s CSID%d_IRQ_STATUS_ADDR = 0x%x\n",
 		 __func__, csid_dev->pdev->id, irq);
 	if (irq & (0x1 <<
 		csid_dev->ctrl_reg->csid_reg.csid_rst_done_irq_bitshift))
@@ -463,7 +463,7 @@ static irqreturn_t msm_csid_irq(int irq_num, void *data)
 			csid_reg.csid_captured_short_pkt_addr);
 		count = (short_dt >> 8) & 0xffff;
 		dt =  short_dt >> 24;
-		CDBG("CSID:: %s:%d core %d dt: 0x%x, count: %d\n",
+		pr_err("CSID:: %s:%d core %d dt: 0x%x, count: %d\n",
 			__func__, __LINE__, csid_dev->pdev->id, dt, count);
 		msm_camera_io_w(0x101, csid_dev->base +
 		csid_dev->ctrl_reg->csid_reg.csid_rst_cmd_addr);
@@ -803,6 +803,7 @@ static long msm_csid_subdev_ioctl(struct v4l2_subdev *sd,
 		rc = msm_csid_cmd(csid_dev, arg);
 		break;
 	case MSM_SD_NOTIFY_FREEZE:
+        pr_err("%s: MSM_SD_NOTIFY_FREEZE \n",__func__);
 		if (csid_dev->csid_state != CSID_POWER_UP)
 			break;
 		if (csid_dev->csid_sof_debug == SOF_DEBUG_DISABLE) {
