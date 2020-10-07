@@ -147,7 +147,7 @@ int ext4_get_encryption_info(struct inode *inode)
 		return -EINVAL;
 	res = 0;
 
-	crypt_info = kmem_cache_alloc(ext4_crypt_info_cachep, GFP_KERNEL);
+	crypt_info = kmem_cache_alloc(ext4_crypt_info_cachep, GFP_NOFS);
 	if (!crypt_info)
 		return -ENOMEM;
 
