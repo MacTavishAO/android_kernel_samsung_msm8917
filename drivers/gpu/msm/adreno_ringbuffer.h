@@ -105,6 +105,7 @@ struct adreno_ringbuffer_pagetable_info {
  * or how long it has been scheduled for after preempting in
  * @starve_timer_state: Indicates the state of the wait.
  * @preempt_lock: Lock to protect the wptr pointer while it is being updated
+ * @timer: Starvation timer for this ringbuffer
  */
 struct adreno_ringbuffer {
 	uint32_t flags;
@@ -139,6 +140,7 @@ struct adreno_ringbuffer {
 	 * enough.
 	 */
 	u32 profile_index;
+	struct timer_list timer;
 };
 
 /* Returns the current ringbuffer */
