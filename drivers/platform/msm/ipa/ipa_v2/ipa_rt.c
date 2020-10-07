@@ -1066,9 +1066,8 @@ static int __ipa_add_rt_rule(enum ipa_ip_type ip, const char *name,
 	 * tables
 	 */
 	if (!strncmp(tbl->name, IPA_DFLT_RT_TBL_NAME, IPA_RESOURCE_NAME_MAX) &&
-	    (tbl->rule_cnt > 0) && (at_rear != 0)) {
-		IPAERR("cannot add rule at end of tbl rule_cnt=%d at_rear=%d\n",
-		       tbl->rule_cnt, at_rear);
+		(tbl->rule_cnt > 0)) {
+			IPAERR("cannot add rules to default rt table\n");
 		goto error;
 	}
 
@@ -1204,6 +1203,7 @@ int __ipa_del_rt_rule(u32 rule_hdl)
 			return -EINVAL;
 		}
 	}
+
 	/* Adding check to confirm still
 	 * header entry present in header table or not
 	 */
@@ -1418,6 +1418,7 @@ int ipa2_reset_rt(enum ipa_ip_type ip, bool user_only)
 						return -EINVAL;
 					}
 				}
+				
 				tbl->rule_cnt--;
 				if (rule->hdr)
 					__ipa_release_hdr(rule->hdr->id);
@@ -1601,6 +1602,11 @@ static int __ipa_mdfy_rt_rule(struct ipa_rt_rule_mdfy *rtrule)
 	if (entry->cookie != IPA_RT_RULE_COOKIE) {
 		IPAERR_RL("bad params\n");
 		goto error;
+	}
+
+	if (!strcmp(entry->tbl->name, IPA_DFLT_RT_TBL_NAME)) {
+		IPAERR_RL("Default tbl rule cannot be modified\n");
+		return -EINVAL;
 	}
 
 	/* Adding check to confirm still
